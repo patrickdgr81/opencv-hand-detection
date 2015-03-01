@@ -43,7 +43,8 @@ struct ctx {
 
 	CvSeq		*contour;	/* Hand contour */
 	CvSeq		*hull;		/* Hand convex hull */
-
+	
+	CvPoint 	prevHand_Center;
 	CvPoint		hand_center;
 	CvPoint		*fingers;	/* Detected fingers positions */
 	CvPoint		*defects;	/* Convexity defects depth points */
@@ -110,6 +111,7 @@ void init_ctx(struct ctx *ctx)
 	ctx->temp_st = cvCreateMemStorage(0);
 	ctx->fingers = calloc(NUM_FINGERS + 1, sizeof(CvPoint));
 	ctx->defects = calloc(NUM_DEFECTS, sizeof(CvPoint));
+	ctx->prevHand_Center = cvPoint(0,0);
 }
 
 void filter_and_threshold(struct ctx *ctx)
@@ -165,7 +167,7 @@ void find_contour(struct ctx *ctx)
 	}
 }
 
-void find_convex_hull(struct ctx *ctx)
+int find_convex_hull(struct ctx *ctx)
 {
 	CvSeq *defects;
 	CvConvexityDefect *defect_array;
@@ -176,7 +178,7 @@ void find_convex_hull(struct ctx *ctx)
 	ctx->hull = NULL;
 
 	if (!ctx->contour)
-		return;
+		return 0;
 
 	ctx->hull = cvConvexHull2(ctx->contour, ctx->hull_st, CV_CLOCKWISE, 0);
 
@@ -219,8 +221,16 @@ void find_convex_hull(struct ctx *ctx)
 
 			ctx->hand_radius = dist / defects->total;
 			free(defect_array);
+	
+			//Higher pixels are at the bottom and to the right	
+			int xDiff = ctx->hand_center.x - ctx->prevHand_Center.x;
+			int yDiff = ctx->hand_center.y - ctx->prevHand_Center.y;
+			printf("hand moved right:%d\n",xDiff);
+			printf("hand moved down:%d\n",yDiff);
+			return 1;
 		}
 	}
+	return 0;
 }
 
 void find_fingers(struct ctx *ctx)
@@ -269,11 +279,17 @@ void find_fingers(struct ctx *ctx)
 	free(points);
 }
 
+void moveHandDisplay(struct ctx *ctx)
+{
+
+
+}
+
 void display(struct ctx *ctx)
 {
 	int i;
 
-	if (ctx->num_fingers == NUM_FINGERS) {
+	if (ctx->num_fingers == NUM_FINGERS || ctx->num_fingers == NUM_FINGERS-1) {
 
 #if defined(SHOW_HAND_CONTOUR)
 		cvDrawContours(ctx->image, ctx->contour, BLUE, GREEN, 0, 1,
@@ -317,12 +333,16 @@ int main(int argc, char **argv)
 
 		filter_and_threshold(&ctx);
 		find_contour(&ctx);
-		find_convex_hull(&ctx);
-		find_fingers(&ctx);
-
-		display(&ctx);
+		int found = find_convex_hull(&ctx);
+		
+		//If you found a palm
+		if (found == 1) {
+			find_fingers(&ctx);
+			display(&ctx);
+		}
+		
 		cvWriteFrame(ctx.writer, ctx.image);
-
+		ctx.prevHand_Center = ctx.hand_center;
 		key = cvWaitKey(1);
 	} while (key != 'q');
 
