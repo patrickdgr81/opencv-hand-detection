@@ -16,9 +16,16 @@
  */
 
 #include <stdio.h>
-
+#include <vector>
 #include <opencv2/imgproc/imgproc_c.h>
 #include <opencv2/highgui/highgui_c.h>
+#include "opencv2/core/core.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/gpu/gpu.hpp"
+
+using namespace std;
+using namespace cv;
+using namespace cv::gpu;
 
 #define VIDEO_FILE	"video.avi"
 #define VIDEO_FORMAT	CV_FOURCC('M', 'J', 'P', 'G')
@@ -31,6 +38,7 @@
 #define YELLOW  CV_RGB(255, 255, 0)
 #define PURPLE  CV_RGB(255, 0, 255)
 #define GREY    CV_RGB(200, 200, 200)
+
 
 struct ctx {
 	CvCapture	*capture;	/* Capture handle */
@@ -109,8 +117,8 @@ void init_ctx(struct ctx *ctx)
 	ctx->contour_st = cvCreateMemStorage(0);
 	ctx->hull_st = cvCreateMemStorage(0);
 	ctx->temp_st = cvCreateMemStorage(0);
-	ctx->fingers = calloc(NUM_FINGERS + 1, sizeof(CvPoint));
-	ctx->defects = calloc(NUM_DEFECTS, sizeof(CvPoint));
+	ctx->fingers = (CvPoint*) calloc(NUM_FINGERS + 1, sizeof(CvPoint));
+	ctx->defects = (CvPoint*)calloc(NUM_DEFECTS, sizeof(CvPoint));
 	ctx->prevHand_Center = cvPoint(0,0);
 }
 
@@ -189,7 +197,7 @@ int find_convex_hull(struct ctx *ctx)
 					     ctx->defects_st);
 
 		if (defects && defects->total) {
-			defect_array = calloc(defects->total,
+			defect_array = (CvConvexityDefect*) calloc(defects->total,
 					      sizeof(CvConvexityDefect));
 			cvCvtSeqToArray(defects, defect_array, CV_WHOLE_SEQ);
 
@@ -247,7 +255,7 @@ void find_fingers(struct ctx *ctx)
 		return;
 
 	n = ctx->contour->total;
-	points = calloc(n, sizeof(CvPoint));
+	points = (CvPoint*) calloc(n, sizeof(CvPoint));
 
 	cvCvtSeqToArray(ctx->contour, points, CV_WHOLE_SEQ);
 
@@ -289,7 +297,7 @@ void display(struct ctx *ctx)
 {
 	int i;
 
-	if (ctx->num_fingers == NUM_FINGERS || ctx->num_fingers == NUM_FINGERS-1) {
+	if (ctx->num_fingers >= NUM_FINGERS-2) {
 
 #if defined(SHOW_HAND_CONTOUR)
 		cvDrawContours(ctx->image, ctx->contour, BLUE, GREEN, 0, 1,
@@ -338,9 +346,8 @@ int main(int argc, char **argv)
 		//If you found a palm
 		if (found == 1) {
 			find_fingers(&ctx);
-			display(&ctx);
 		}
-		
+		display(&ctx);
 		cvWriteFrame(ctx.writer, ctx.image);
 		ctx.prevHand_Center = ctx.hand_center;
 		key = cvWaitKey(1);
