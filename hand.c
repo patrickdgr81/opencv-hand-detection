@@ -63,7 +63,7 @@ struct ctx {
 	CvMemStorage	*temp_st;
 	CvMemStorage	*defects_st;
 
-	IplConvKernel	*kernel;	/* Kernel for morph operations */
+	Mat kernel;	/* Kernel for morph operations */
 
 	int		num_fingers;
 	int		hand_radius;
@@ -152,8 +152,9 @@ void filter_and_threshold(struct ctx *ctx)
 	/* Apply morphological opening */
 	//cvMorphologyEx(ctx->thr_image, ctx->thr_image, NULL, ctx->kernel,
 	//	       CV_MOP_OPEN, 1);
-	morphologyEx(ctx->thr_image, ctx->thr_image
-	cvSmooth(ctx->thr_image, ctx->thr_image, CV_GAUSSIAN, 3, 3, 0, 0);
+	morphologyEx(ctx->thr_image, ctx->thr_image, CV_MOP_OPEN, ctx->kernel, Point(-1,-1), 1);
+	//cvSmooth(ctx->thr_image, ctx->thr_image, CV_GAUSSIAN, 3, 3, 0, 0);
+	GaussianBlur(ctx->thr_image, ctx->thu_image, CV_GAUSSIAN,3.0, 3.0, 0);
 }
 
 void find_contour(struct ctx *ctx)
