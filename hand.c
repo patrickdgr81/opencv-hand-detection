@@ -22,6 +22,7 @@
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/gpu/gpu.hpp"
+#include <time.h>
 
 using namespace std;
 using namespace cv;
@@ -41,13 +42,13 @@ using namespace cv::gpu;
 
 
 struct ctx {
-	CvCapture	*capture;	/* Capture handle */
-	CvVideoWriter	*writer;	/* File recording handle */
+	VideoCapture	capture;	/* Capture handle */
+	VideoWriter	writer;	/* File recording handle */
 
-	IplImage	*image;		/* Input image */
-	IplImage	*thr_image;	/* After filtering and thresholding */
-	IplImage	*temp_image1;	/* Temporary image (1 channel) */
-	IplImage	*temp_image3;	/* Temporary image (3 channels) */
+	Mat	image;		/* Input image */
+	Mat	thr_image;	/* After filtering and thresholding */
+	Mat	temp_image1;	/* Temporary image (1 channel) */
+	Mat	temp_image3;	/* Temporary image (3 channels) */
 
 	CvSeq		*contour;	/* Hand contour */
 	CvSeq		*hull;		/* Hand convex hull */
@@ -71,29 +72,34 @@ struct ctx {
 
 void init_capture(struct ctx *ctx)
 {
-	ctx->capture = cvCaptureFromCAM(0);
-	if (!ctx->capture) {
+	ctx->capture = VideoCapture(0);
+	
+	if (ctx->capture.isOpened()) {
 		fprintf(stderr, "Error initializing capture\n");
 		exit(1);
 	}
-	ctx->image = cvQueryFrame(ctx->capture);
+
+	//ctx->image = cvQueryFrame(ctx->capture);
+	(ctx->capture).read(ctx->image);
 }
 
 void init_recording(struct ctx *ctx)
 {
 	int fps, width, height;
 
-	fps = cvGetCaptureProperty(ctx->capture, CV_CAP_PROP_FPS);
-	width = cvGetCaptureProperty(ctx->capture, CV_CAP_PROP_FRAME_WIDTH);
-	height = cvGetCaptureProperty(ctx->capture, CV_CAP_PROP_FRAME_HEIGHT);
-
+	//fps = cvGetCaptureProperty(ctx->capture, CV_CAP_PROP_FPS);
+	fps = ctx->capture.get(CV_CAP_PROP_FPS);	
+	//width = cvGetCaptureProperty(ctx->capture, CV_CAP_PROP_FRAME_WIDTH);
+	width = ctx->capture.get(CV_CAP_PROP_FRAME_WIDTH);
+	//height = cvGetCaptureProperty(ctx->capture, CV_CAP_PROP_FRAME_HEIGHT);
+	height = ctx->capture.get(CV_CAP_PROP_FRAME_HEIGHT);
 	if (fps < 0)
 		fps = 10;
 
-	ctx->writer = cvCreateVideoWriter(VIDEO_FILE, VIDEO_FORMAT, fps,
+	ctx->writer = VideoWriter(VIDEO_FILE, VIDEO_FORMAT, fps,
 					  cvSize(width, height), 1);
 
-	if (!ctx->writer) {
+	if (!ctx->writer.isOpened()) {
 		fprintf(stderr, "Error initializing video writer\n");
 		exit(1);
 	}
@@ -109,9 +115,11 @@ void init_windows(void)
 
 void init_ctx(struct ctx *ctx)
 {
-	ctx->thr_image = cvCreateImage(cvGetSize(ctx->image), 8, 1);
-	ctx->temp_image1 = cvCreateImage(cvGetSize(ctx->image), 8, 1);
-	ctx->temp_image3 = cvCreateImage(cvGetSize(ctx->image), 8, 3);
+	CvSize imageSize = (ctx->image).size();
+	ctx->thr_image = cv::Mat(imageSize, 8);
+	//ctx->temp_image1 = cvCreateImage(cvGetSize(ctx->image), 8, 1);
+	ctx->temp_image1 = cv::Mat(imageSize, 8);
+	ctx->temp_image3 = cv::Mat(imageSize, 8);
 	ctx->kernel = cvCreateStructuringElementEx(9, 9, 4, 4, CV_SHAPE_RECT,
 						   NULL);
 	ctx->contour_st = cvCreateMemStorage(0);
@@ -126,23 +134,25 @@ void filter_and_threshold(struct ctx *ctx)
 {
 
 	/* Soften image */
-	cvSmooth(ctx->image, ctx->temp_image3, CV_GAUSSIAN, 11, 11, 0, 0);
+	//cvSmooth(ctx->image, ctx->temp_image3, CV_GAUSSIAN, 11, 11, 0, 0);
+	GaussianBlur(ctx->image, ctx->temp_image3, ctx->image.size(),11.0, 11.0, 0);
 	/* Remove some impulsive noise */
-	cvSmooth(ctx->temp_image3, ctx->temp_image3, CV_MEDIAN, 11, 11, 0, 0);
+	//cvSmooth(ctx->temp_image3, ctx->temp_image3, CV_MEDIAN,0, 0, 0);
+	medianBlur(ctx->temp_image3, ctx->temp_image3,1);
 
-	cvCvtColor(ctx->temp_image3, ctx->temp_image3, CV_BGR2HSV);
-
+	cvtColor(ctx->temp_image3, ctx->temp_image3, CV_BGR2HSV, 0);
 	/*
 	 * Apply threshold on HSV values to detect skin color
 	 */
-	cvInRangeS(ctx->temp_image3,
-		   cvScalar(0, 55, 90, 255),
-		   cvScalar(28, 175, 230, 255),
+	inRange(ctx->temp_image3,
+		   Scalar(0, 55, 90, 255),
+		   Scalar(28, 175, 230, 255),
 		   ctx->thr_image);
 
 	/* Apply morphological opening */
-	cvMorphologyEx(ctx->thr_image, ctx->thr_image, NULL, ctx->kernel,
-		       CV_MOP_OPEN, 1);
+	//cvMorphologyEx(ctx->thr_image, ctx->thr_image, NULL, ctx->kernel,
+	//	       CV_MOP_OPEN, 1);
+	morphologyEx(ctx->thr_image, ctx->thr_image
 	cvSmooth(ctx->thr_image, ctx->thr_image, CV_GAUSSIAN, 3, 3, 0, 0);
 }
 
@@ -233,8 +243,8 @@ int find_convex_hull(struct ctx *ctx)
 			//Higher pixels are at the bottom and to the right	
 			int xDiff = ctx->hand_center.x - ctx->prevHand_Center.x;
 			int yDiff = ctx->hand_center.y - ctx->prevHand_Center.y;
-			printf("hand moved right:%d\n",xDiff);
-			printf("hand moved down:%d\n",yDiff);
+			//printf("hand moved right:%d\n",xDiff);
+			//printf("hand moved down:%d\n",yDiff);
 			return 1;
 		}
 	}
@@ -335,14 +345,27 @@ int main(int argc, char **argv)
 	init_recording(&ctx);
 	init_windows();
 	init_ctx(&ctx);
-
+	
+	clock_t t;
+	clock_t tempT;
 	do {
+		t = clock();
 		ctx.image = cvQueryFrame(ctx.capture);
-
+		tempT = clock() - t;
+		t = clock();
+		printf("It took cvQueryFrame %d clicks \n", tempT);
 		filter_and_threshold(&ctx);
+		tempT = clock() - t;
+		t = clock();
+		printf("It took filterAndThreshold %d clicks \n", tempT);
 		find_contour(&ctx);
+		tempT = clock() - t;
+		t = clock();
+		printf("It took findContour %d clicks \n", tempT);
 		int found = find_convex_hull(&ctx);
-		
+		tempT = clock() - t;
+		t = clock();
+		printf("It took findConvexHull %d clicks \n", tempT);
 		//If you found a palm
 		if (found == 1) {
 			find_fingers(&ctx);
