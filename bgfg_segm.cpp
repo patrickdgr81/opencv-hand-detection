@@ -17,7 +17,6 @@ enum Method
     GMG
 };
 
-Mat src; Mat src_gray;
 int thresh = 100;
 int max_thresh = 255;
 RNG rng(12345);
@@ -51,8 +50,8 @@ int main(int argc, const char** argv)
         return -1;
     }
 
-    Method m = method == "mog" ? MOG :
-                                  MOG;
+    Method m = method == "mog" ? MOG2 :
+                                  MOG2;
 
     VideoCapture cap;
     cap.open(0);
@@ -64,8 +63,8 @@ int main(int argc, const char** argv)
     }
 
     Mat frame;
+    Mat grayscaleFrame;
     cap >> frame;
-
     GpuMat d_frame(frame);
 
     FGDStatModel fgd_stat;
@@ -82,85 +81,39 @@ int main(int argc, const char** argv)
     Mat fgimg;
     Mat bgimg;
 
-    mog(d_frame, d_fgmask, 0.01f);
-    switch (m)
-    {
-    case FGD_STAT:
-        fgd_stat.create(d_frame);
-        break;
-
-    case MOG:
-        
-        break;
-
-    case MOG2:
-        mog2(d_frame, d_fgmask);
-        break;
-
-    case GMG:
-        gmg.initialize(d_frame.size());
-        break;
-    }
-
+    mog2(d_frame, d_fgmask);
+    namedWindow("original", WINDOW_NORMAL);
     namedWindow("image", WINDOW_NORMAL);
-    namedWindow("foreground mask", WINDOW_NORMAL);
-    namedWindow("foreground image", WINDOW_NORMAL);
-    if (m != GMG)
-    {
-        namedWindow("mean background image", WINDOW_NORMAL);
-    }
-
+    namedWindow("blurred", WINDOW_NORMAL);
+    namedWindow("threshold", WINDOW_NORMAL);
+    Size ksize;
+    ksize.height = 13;
+    ksize.width = 25;
     for(;;)
     {
         cap >> frame;
         if (frame.empty())
             break;
-        d_frame.upload(frame);
+	
+	imshow("original", frame);
+	
+	inRange(frame, Scalar(0, 55, 90, 255), Scalar(50, 175, 230, 255), grayscaleFrame);
+	d_frame.upload(grayscaleFrame);
 
-        int64 start = cv::getTickCount();
+	gpu::GpuMat dst(grayscaleFrame);
+	gpu::GpuMat dst1(grayscaleFrame);
+	gpu::GpuMat dst2(grayscaleFrame);
 
-        //update the model
-        switch (m)
-        {
-        case FGD_STAT:
-            fgd_stat.update(d_frame);
-            d_fgmask = fgd_stat.foreground;
-            d_bgimg = fgd_stat.background;
-            break;
+	gpu::GaussianBlur(d_frame, dst, ksize, 0);
 
-        case MOG:
-            mog(d_frame, d_fgmask, 0.01f);
-            mog.getBackgroundImage(d_bgimg);
-            break;
-
-        case MOG2:
-            mog2(d_frame, d_fgmask);
-            mog2.getBackgroundImage(d_bgimg);
-            break;
-
-        case GMG:
-            gmg(d_frame, d_fgmask);
-            break;
-        }
-
-        double fps = cv::getTickFrequency() / (cv::getTickCount() - start);
-        std::cout << "FPS : " << fps << std::endl;
-
-        d_fgimg.create(d_frame.size(), d_frame.type());
-        d_fgimg.setTo(Scalar::all(0));
-        d_frame.copyTo(d_fgimg, d_fgmask);
-
-        d_fgmask.download(fgmask);
-        d_fgimg.download(fgimg);
-        if (!d_bgimg.empty())
-            d_bgimg.download(bgimg);
-
-        imshow("image", frame);
-        imshow("foreground mask", fgmask);
-        imshow("foreground image", fgimg);
-        if (!bgimg.empty())
-            imshow("mean background image", bgimg);
-
+	imshow("image", grayscaleFrame);	
+	dst.download(grayscaleFrame);
+        imshow("blurred", grayscaleFrame);
+	
+	gpu::threshold(dst, dst1, thresh, max_thresh, THRESH_BINARY);
+	dst1.download(frame);	
+	convexHull(frame,bgimg);	
+	imshow("threshold", frame);
         int key = waitKey(30);
         if (key == 27)
             break;
@@ -168,3 +121,6 @@ int main(int argc, const char** argv)
 
     return 0;
 }
+
+
+
