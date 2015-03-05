@@ -1,6 +1,7 @@
+//#include <Python.h>
 #include <iostream>
 #include <string>
-
+#include <stdio.h>
 #include "opencv2/core/core.hpp"
 #include "opencv2/gpu/gpu.hpp"
 #include "opencv2/highgui/highgui.hpp"
@@ -90,6 +91,8 @@ int main(int argc, const char** argv)
     ksize.height = 13;
     ksize.width = 25;
     vector<int> data;
+    vector<vector<Point> > contours;
+    vector<Vec4i> hierarchy;
     for(;;)
     {
         cap >> frame;
@@ -98,9 +101,9 @@ int main(int argc, const char** argv)
 	
 	imshow("original", frame);
 	
-	inRange(frame, Scalar(0, 55, 90, 255), Scalar(50, 175, 230, 255), grayscaleFrame);
+	inRange(frame, Scalar(0, 55, 90, 255), Scalar(70, 175, 230, 255), grayscaleFrame);
 	d_frame.upload(grayscaleFrame);
-	convexHull(Mat(grayscaleFrame), data);
+	
 	gpu::GpuMat dst(grayscaleFrame);
 	gpu::GpuMat dst1(grayscaleFrame);
 	gpu::GpuMat dst2(grayscaleFrame);
@@ -113,10 +116,23 @@ int main(int argc, const char** argv)
 	
 	gpu::threshold(dst, dst1, thresh, max_thresh, THRESH_BINARY);
 	dst1.download(frame);
-	//std::vector<float> array;
-	//array.assign((float*)dst1.datastart, (float*)dst1.dataend);
-		
 	imshow("threshold", frame);
+	findContours(frame, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+        convexHull(Mat(contours[0]), data);
+	
+	//printf("x=%d y=%d\n", contours[0][data[0]].x, contours[0][data[0]].y);
+	
+	int value = 0;
+	int count = 0;
+	for(int i =0; i < contours.size(); i++) {
+	  for(int j = 0; j < contours.at(i).size(); j++) {
+	    value += contours[i][j].y;
+	    count++;
+	  }
+	}
+	int avg = value/count;
+	printf("avg: %d\n",avg);
+	
         int key = waitKey(30);
         if (key == 27)
             break;
