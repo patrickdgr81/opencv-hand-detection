@@ -45,7 +45,7 @@ struct ctx {
 	VideoCapture	capture;	/* Capture handle */
 	VideoWriter	writer;	/* File recording handle */
 
-	Mat	image;		/* Input image */
+	GpuMat	image;		/* Input image */
 	Mat	thr_image;	/* After filtering and thresholding */
 	Mat	temp_image1;	/* Temporary image (1 channel) */
 	Mat	temp_image3;	/* Temporary image (3 channels) */
@@ -71,7 +71,7 @@ struct ctx {
 };
 
 void init_capture(struct ctx *ctx)
-{
+{fdg
 	ctx->capture = VideoCapture(0);
 	
 	if (ctx->capture.isOpened()) {

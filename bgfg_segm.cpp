@@ -89,6 +89,7 @@ int main(int argc, const char** argv)
     Size ksize;
     ksize.height = 13;
     ksize.width = 25;
+    vector<int> data;
     for(;;)
     {
         cap >> frame;
@@ -99,7 +100,7 @@ int main(int argc, const char** argv)
 	
 	inRange(frame, Scalar(0, 55, 90, 255), Scalar(50, 175, 230, 255), grayscaleFrame);
 	d_frame.upload(grayscaleFrame);
-
+	convexHull(Mat(grayscaleFrame), data);
 	gpu::GpuMat dst(grayscaleFrame);
 	gpu::GpuMat dst1(grayscaleFrame);
 	gpu::GpuMat dst2(grayscaleFrame);
@@ -111,8 +112,10 @@ int main(int argc, const char** argv)
         imshow("blurred", grayscaleFrame);
 	
 	gpu::threshold(dst, dst1, thresh, max_thresh, THRESH_BINARY);
-	dst1.download(frame);	
-	convexHull(frame,bgimg);	
+	dst1.download(frame);
+	//std::vector<float> array;
+	//array.assign((float*)dst1.datastart, (float*)dst1.dataend);
+		
 	imshow("threshold", frame);
         int key = waitKey(30);
         if (key == 27)
